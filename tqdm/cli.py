@@ -31,13 +31,25 @@ def cast(val, typ):
             return False
         else:
             raise TqdmTypeError(val + ' : ' + typ)
-    try:
-        return eval(typ + '("' + val + '")')
-    except Exception:
-        if typ == 'chr':
-            return chr(ord(eval('"' + val + '"'))).encode()
-        else:
+    if typ == 'chr':
+        if len(val) == 1:
+            return val.encode()
+        if re.match(r"^\\\w+$", val):
+            return eval('"{}"'.format(val)).encode()
+        raise TqdmTypeError(val + ' : ' + typ)
+    if typ == 'str':
+        return val
+    if typ == 'int':
+        try:
+            return int(val)
+        except ValueError:
             raise TqdmTypeError(val + ' : ' + typ)
+    if typ == 'float':
+        try:
+            return float(val)
+        except ValueError:
+            raise TqdmTypeError(val + ' : ' + typ)
+    raise TqdmTypeError(val + ' : ' + typ)
 
 
 def posix_pipe(fin, fout, delim=b'\\n', buf_size=256,

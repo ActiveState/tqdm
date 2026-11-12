@@ -5,7 +5,7 @@ import sys
 from functools import wraps
 from os import linesep
 
-from tqdm.cli import TqdmKeyError, TqdmTypeError, main
+from tqdm.cli import TqdmKeyError, TqdmTypeError, cast, main
 from tqdm.utils import IS_WIN
 
 from .tests_tqdm import BytesIO, _range, closing, mark, raises
@@ -243,3 +243,30 @@ def test_exceptions(capsysbin):
     for i in ('-h', '--help', '-v', '--version'):
         with raises(SystemExit):
             main(argv=[i])
+
+
+def test_cast_no_eval():
+    """CVE-2024-34062: option values are parsed, never evaluated"""
+    import tqdm.cli as cli
+    cli._CVE_2024_34062_RAN = False
+    # one expression: the old cast() ran eval('int("' + val + '")'), which executed it
+    payload = ('1") if __import__("tqdm.cli").cli.__setattr__("_CVE_2024_34062_RAN", True)'
+               ' is None else int("1')
+    for typ in ('int', 'float', 'chr', 'int or float'):
+        with raises(TqdmTypeError):
+            cast(payload, typ)
+    # str values are returned as given, not evaluated
+    assert cast(payload, 'str') == payload
+    assert cli._CVE_2024_34062_RAN is False
+    # what the CLI options legitimately accept still parses
+    assert cast('42', 'int') == 42
+    assert cast('0.5', 'float') == 0.5
+    assert cast('1e3', 'int or float') == 1000.0
+    assert cast('D', 'chr') == b'D'
+    assert cast(r'\n', 'chr') == b'\n'
+    assert cast(r'\0', 'chr') == b'\0'
+    assert cast('', 'bool') is True
+    with raises(TqdmTypeError):
+        cast('ab', 'chr')
+    with raises(TqdmTypeError):
+        cast('x', 'int')
