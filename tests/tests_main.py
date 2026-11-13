@@ -270,3 +270,17 @@ def test_cast_no_eval():
         cast('ab', 'chr')
     with raises(TqdmTypeError):
         cast('x', 'int')
+
+
+def test_cast_chr_no_eval(monkeypatch):
+    """chr escapes are decoded as string literals, never eval()ed"""
+    import tqdm.cli as cli
+
+    def no_eval(*_, **__):
+        raise AssertionError("cast() called eval()")
+    # a module global shadows the builtin, so any eval() in cli.py hits this
+    monkeypatch.setattr(cli, 'eval', no_eval, raising=False)
+    assert cast(r'\n', 'chr') == b'\n'
+    assert cast(r'\t', 'chr') == b'\t'
+    assert cast(r'\0', 'chr') == b'\0'
+    assert cast(r'\x41', 'chr') == b'A'
